@@ -1,0 +1,100 @@
+:root {
+  --cui-content-width: 1920px;
+  --cui-available-width: calc(100vw - 96px);
+  --cui-font-size: 14px;
+  --cui-line-height: 1.35;
+  --cui-paragraph-gap: 4px;
+  --cui-message-gap: 8px;
+}
+
+html.cui-layout main [class*="--thread-content-max-width"] {
+  --thread-content-max-width: min(var(--cui-content-width), var(--cui-available-width)) !important;
+}
+
+html.cui-layout main .markdown.prose,
+html.cui-layout main .text-message {
+  font-size: var(--cui-font-size) !important;
+  line-height: var(--cui-line-height) !important;
+}
+
+html.cui-layout main .markdown.prose p {
+  margin-block: var(--cui-paragraph-gap) !important;
+}
+
+html.cui-layout main :has(> .text-message) {
+  gap: var(--cui-message-gap) !important;
+}
+
+html.cui-square body button,
+html.cui-square body input,
+html.cui-square body textarea,
+html.cui-square body select,
+html.cui-square body [role="button"],
+html.cui-square body [class*="rounded"] {
+  border-radius: 0 !important;
+}
+
+html.cui-square [data-composer-surface="true"],
+html.cui-square form:has(.ProseMirror),
+html.cui-square form:has(.ProseMirror) * {
+  border-radius: 0 !important;
+}
+
+html.cui-hide-disclaimer [data-cui-disclaimer="true"] {
+  display: none !important;
+}
+
+#cui-layout-toggle {
+  position: fixed;
+  z-index: 2147483000;
+  width: 40px;
+  height: 40px;
+  min-height: 0;
+  margin: 0;
+  padding: 6px 10px 6px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #f4f4f5;
+  font: 500 14px/1 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+#cui-layout-toggle:hover,
+#cui-layout-toggle[data-open="true"] {
+  background: #18181b;
+  color: #fafafa;
+}
+
+#cui-layout-toggle .cui-toggle-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+  flex: 0 0 auto;
+}
+
+#cui-layout-toggle .cui-toggle-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#cui-layout-toggle.cui-toggle-compact {
+  justify-content: center;
+  gap: 0;
+  padding: 0;
+}
+
+#cui-layout-toggle.cui-toggle-compact .cui-toggle-label {
+  display: none;
+}
+
+html.cui-square #cui-layout-toggle {
+  border-radius: 0 !important;
+}
