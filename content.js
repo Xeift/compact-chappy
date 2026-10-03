@@ -667,6 +667,11 @@
   }
 
   async function init() {
+    const timingInjection = await chrome.runtime.sendMessage({ type: "inject-timing" });
+    if (!timingInjection?.ok) {
+      throw new Error(timingInjection?.error || "Failed to inject timing script");
+    }
+
     settings = await storageGet(DEFAULTS);
     applySettings();
     ensureToggleButton();
