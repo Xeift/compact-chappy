@@ -108,8 +108,9 @@ html.cui-square #cui-layout-toggle {
   vertical-align: middle;
 }
 
-.cui-turn-timeline[hidden] {
-  display: none;
+.cui-turn-timeline[hidden],
+html:not(.cui-enhanced-thinking) .cui-turn-timeline {
+  display: none !important;
 }
 
 [data-cui-timeline-host="true"],

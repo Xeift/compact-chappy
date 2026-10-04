@@ -6,7 +6,8 @@
     paragraphGap: 4,
     messageGap: 8,
     square: true,
-    hideDisclaimer: false
+    hideDisclaimer: false,
+    enhancedThinkingDisplay: true
   };
 
   const DENSITY_PRESETS = {
@@ -47,6 +48,10 @@
     root.classList.add("cui-layout");
     root.classList.toggle("cui-square", Boolean(settings.square));
     root.classList.toggle("cui-hide-disclaimer", Boolean(settings.hideDisclaimer));
+    root.classList.toggle(
+      "cui-enhanced-thinking",
+      Boolean(settings.enhancedThinkingDisplay)
+    );
 
     root.style.setProperty("--cui-content-width", `${settings.contentWidth}px`);
     root.style.setProperty("--cui-font-size", `${settings.fontSize}px`);
@@ -69,10 +74,29 @@
     }
   }
 
+  async function injectTiming() {
+    const timingInjection = await chrome.runtime.sendMessage({
+      type: "inject-timing"
+    });
+
+    if (!timingInjection?.ok) {
+      throw new Error(
+        timingInjection?.error || "Failed to inject timing script"
+      );
+    }
+  }
+
   async function updateSettings(patch) {
     settings = { ...settings, ...patch };
     applySettings();
     await storageSet(settings);
+
+    if (
+      Object.hasOwn(patch, "enhancedThinkingDisplay") &&
+      settings.enhancedThinkingDisplay
+    ) {
+      await injectTiming();
+    }
   }
 
   function isActuallyVisible(el) {
@@ -248,7 +272,7 @@
 
         .panel {
           width: 100%;
-          max-height: min(680px, calc(100vh - 120px));
+          max-height: calc(100vh - 120px);
           overflow: auto;
           background: #09090b;
           color: #f4f4f5;
@@ -546,6 +570,14 @@
             </span>
             <input class="switch" data-setting="hideDisclaimer" type="checkbox">
           </label>
+
+          <label class="toggle-row">
+            <span class="toggle-copy">
+              <span class="toggle-title">Enhanced thinking display</span>
+              <span class="toggle-note">Show the live response timing timeline</span>
+            </span>
+            <input class="switch" data-setting="enhancedThinkingDisplay" type="checkbox">
+          </label>
         </div>
 
         <div class="footer">
@@ -646,6 +678,10 @@
         root.classList.add("cui-layout");
         root.classList.toggle("cui-square", Boolean(settings.square));
         root.classList.toggle("cui-hide-disclaimer", Boolean(settings.hideDisclaimer));
+        root.classList.toggle(
+          "cui-enhanced-thinking",
+          Boolean(settings.enhancedThinkingDisplay)
+        );
 
         ensureToggleButton();
         ensurePanel();
@@ -667,13 +703,12 @@
   }
 
   async function init() {
-    const timingInjection = await chrome.runtime.sendMessage({ type: "inject-timing" });
-    if (!timingInjection?.ok) {
-      throw new Error(timingInjection?.error || "Failed to inject timing script");
-    }
-
     settings = await storageGet(DEFAULTS);
     applySettings();
+
+    if (settings.enhancedThinkingDisplay) {
+      await injectTiming();
+    }
     ensureToggleButton();
     ensurePanel();
     installObserver();

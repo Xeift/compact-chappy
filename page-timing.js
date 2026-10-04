@@ -166,6 +166,12 @@
     return performance.now() + epochSeconds * 1000 - Date.now();
   }
 
+  function isEnhancedThinkingEnabled() {
+    return document.documentElement.classList.contains(
+      "cui-enhanced-thinking"
+    );
+  }
+
   function formatDuration(ms) {
     return `${(Math.max(0, ms) / 1000).toFixed(1)} s`;
   }
@@ -731,12 +737,19 @@
   }
 
   function mountTimeline(state) {
+    if (!isEnhancedThinkingEnabled()) return;
+
     window.__compactChappyTiming.mountAttempts += 1;
 
     const workedLabel = getWorkedLabel(state);
 
     if (workedLabel) {
       clearLiveMount(state);
+
+      if (!workedLabel.dataset.cuiNativeWorkedText) {
+        workedLabel.dataset.cuiNativeWorkedText =
+          (workedLabel.textContent || "").trim();
+      }
 
       workedLabel.textContent = "";
       workedLabel.dataset.cuiTimelineHost = "true";
@@ -796,6 +809,8 @@
   }
 
   function renderTimeline(state) {
+    if (!isEnhancedThinkingEnabled()) return;
+
     mountTimeline(state);
 
     const now = performance.now();
@@ -1110,7 +1125,7 @@
   }
 
   function scheduleMount() {
-    if (mountQueued || !activeState) return;
+    if (!isEnhancedThinkingEnabled() || mountQueued || !activeState) return;
     mountQueued = true;
 
     requestAnimationFrame(() => {
@@ -1122,6 +1137,8 @@
   let lastCharacterTraceAt = 0;
 
   new MutationObserver((records) => {
+    if (!isEnhancedThinkingEnabled()) return;
+
     scheduleMount();
 
     if (!window.__compactChappyTiming.traceActive) return;
@@ -1145,7 +1162,63 @@
     subtree: true
   });
 
+  new MutationObserver(() => {
+    if (!activeState) return;
+
+    if (!isEnhancedThinkingEnabled()) {
+      stopTimer(activeState);
+      clearLiveMount(activeState);
+
+      if (
+        activeState.completionAnimationStarted &&
+        !activeState.completionAnimationDone
+      ) {
+        cleanupCompletionMotion(activeState);
+      }
+
+      for (const host of document.querySelectorAll(
+        '[data-cui-timeline-host="true"]'
+      )) {
+        const nativeText = host.dataset.cuiNativeWorkedText;
+        const container = host.parentElement;
+
+        if (nativeText) {
+          host.textContent = nativeText;
+        }
+
+        delete host.dataset.cuiTimelineHost;
+        delete host.dataset.cuiNativeWorkedText;
+
+        if (container) {
+          delete container.dataset.cuiTimelineHostContainer;
+        }
+      }
+
+      if (activeState.timeline.isConnected) {
+        activeState.timeline.remove();
+      }
+
+      return;
+    }
+
+    if (
+      activeState.lastTokenAt == null &&
+      activeState.timer === null
+    ) {
+      startTimer(activeState);
+    }
+
+    renderTimeline(activeState);
+  }).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"]
+  });
+
   window.fetch = async function (...args) {
+    if (!isEnhancedThinkingEnabled()) {
+      return originalFetch.apply(this, args);
+    }
+
     const rawUrl = args[0] instanceof Request ? args[0].url : String(args[0]);
     const url = new URL(rawUrl, location.href);
 
