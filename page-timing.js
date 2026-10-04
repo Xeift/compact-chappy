@@ -2,7 +2,7 @@
   if (window.__compactChappyTiming?.loaded) return;
 
   window.__compactChappyTiming = {
-    build: "timeline-completion-motion-1",
+    build: "timeline-railgun-motion-2",
     loaded: true,
     installedAt: Date.now(),
     conversationRequests: 0,
@@ -176,8 +176,16 @@
     return `${(Math.max(0, ms) / 1000).toFixed(1)} s`;
   }
 
-  function formatCompactDuration(ms) {
-    return formatDuration(ms).replace(" ", "");
+  function formatTotalDuration(ms) {
+    const totalSeconds = Math.max(0, Math.round(ms / 1000));
+
+    if (totalSeconds < 60) {
+      return `${totalSeconds}s`;
+    }
+
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds - minutes * 60;
+    return `${minutes}m ${seconds}s`;
   }
 
   function animateMotion(state, element, keyframes, delay, duration, easing) {
@@ -250,17 +258,27 @@
       .forEach((element) => element.remove());
 
     const total = state.timeline.querySelector(".cui-timeline-total");
-    const number = total.querySelector("span");
+    const value = total.querySelector(".cui-timeline-total-value");
 
-    number.textContent = formatCompactDuration(
+    value.textContent = formatTotalDuration(
       state.lastTokenAt - state.feReqAt
     );
-    number.style.width = "";
-    number.style.textAlign = "";
+    value.style.width = "";
+    value.style.textAlign = "";
+    value.style.opacity = "";
+
+    for (const bracket of total.querySelectorAll(
+      ".cui-timeline-total-bracket"
+    )) {
+      bracket.style.opacity = "";
+      bracket.style.transform = "";
+      bracket.style.textShadow = "";
+    }
 
     total.style.opacity = "1";
     total.style.transform = "";
     total.style.filter = "";
+    state.motionOverlay = null;
 
     delete state.timeline.dataset.completionMotion;
     state.timeline.dataset.completionDone = "true";
@@ -283,15 +301,21 @@
       ...timeline.querySelectorAll(".cui-timeline-duration")
     ];
     const total = timeline.querySelector(".cui-timeline-total");
-    const number = total.querySelector("span");
-    const finalText = formatCompactDuration(
+    const value = total.querySelector(".cui-timeline-total-value");
+    const leftBracket = total.querySelector(
+      ".cui-timeline-total-bracket-left"
+    );
+    const rightBracket = total.querySelector(
+      ".cui-timeline-total-bracket-right"
+    );
+    const finalText = formatTotalDuration(
       state.lastTokenAt - state.feReqAt
     );
 
-    number.textContent = finalText;
-    number.style.width = `${number.getBoundingClientRect().width}px`;
-    number.style.textAlign = "right";
-    number.textContent = "0.0s";
+    value.textContent = finalText;
+    value.style.width = `${value.getBoundingClientRect().width}px`;
+    value.style.textAlign = "center";
+    value.textContent = "0s";
 
     const overlay = document.createElementNS(
       "http://www.w3.org/2000/svg",
@@ -320,11 +344,17 @@
 
     const sumAt = 220;
     const revealAt = sumAt + 300;
-    const lockAt = revealAt + 1300;
-    const moveAt = lockAt + 360;
-    const launchAt = moveAt + 130;
-    const arrivalAt = launchAt + 430;
-    const finishAt = arrivalAt + 420;
+    const counterDuration = 800;
+    const lockAt = revealAt + counterDuration;
+    const pauseDuration = 280;
+    const launchAt = lockAt + pauseDuration;
+    const flightDuration = 145;
+    const arrivalAt = launchAt + flightDuration;
+    const stompDelay = 12;
+    const slamDuration = 68;
+    const settleDuration = 48;
+    const finishAt =
+      arrivalAt + stompDelay + slamDuration + settleDuration + 190;
 
     const leftBrace = createMotionPath(
       state,
@@ -359,39 +389,99 @@
       );
     }
 
+    total.style.opacity = "1";
+    total.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+    value.style.opacity = "0";
+    leftBracket.style.opacity = "0";
+    rightBracket.style.opacity = "0";
+
     animateMotion(
       state,
-      total,
+      value,
+      [
+        { opacity: 0 },
+        { opacity: 1 }
+      ],
+      revealAt,
+      100,
+      "cubic-bezier(.22, 1, .36, 1)"
+    );
+
+    const introSnap = 105;
+    const introSettle = 52;
+    const introDuration = introSnap + introSettle;
+    const introSnapOffset = introSnap / introDuration;
+
+    animateMotion(
+      state,
+      leftBracket,
       [
         {
           opacity: 0,
-          transform: `translate(${dx}px, ${dy + 3}px)`,
-          filter: "blur(1px)"
+          transform: "translate3d(-30px, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
         },
         {
           opacity: 1,
-          transform: `translate(${dx}px, ${dy}px)`,
-          filter: "blur(0px)"
+          transform: "translate3d(2.5px, 0, 0) scaleX(1.22)",
+          textShadow: "0 0 8px #fff",
+          offset: introSnapOffset
+        },
+        {
+          opacity: 1,
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
         }
       ],
       revealAt,
-      220,
-      "cubic-bezier(.22, 1, .36, 1)"
+      introDuration,
+      "cubic-bezier(.08, .82, .16, 1)"
+    );
+
+    animateMotion(
+      state,
+      rightBracket,
+      [
+        {
+          opacity: 0,
+          transform: "translate3d(30px, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
+        },
+        {
+          opacity: 1,
+          transform: "translate3d(-2.5px, 0, 0) scaleX(1.22)",
+          textShadow: "0 0 8px #fff",
+          offset: introSnapOffset
+        },
+        {
+          opacity: 1,
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
+        }
+      ],
+      revealAt,
+      introDuration,
+      "cubic-bezier(.08, .82, .16, 1)"
     );
 
     const startedAt = performance.now();
     const counter = (now) => {
       const progress = Math.max(
         0,
-        Math.min(1, (now - startedAt - revealAt) / 1300)
+        Math.min(
+          1,
+          (now - startedAt - revealAt) / counterDuration
+        )
       );
       const eased = progress * progress * (3 - 2 * progress);
       const totalMs = Math.max(0, state.lastTokenAt - state.feReqAt);
 
-      number.textContent = `${(totalMs * eased / 1000).toFixed(1)}s`;
+      value.textContent = formatTotalDuration(totalMs * eased);
 
       if (progress < 1) {
         state.completionFrame = requestAnimationFrame(counter);
+      } else {
+        state.completionFrame = null;
       }
     };
     state.completionFrame = requestAnimationFrame(counter);
@@ -412,224 +502,193 @@
             transform: "translateY(-7px) scaleX(.06)"
           }
         ],
-        moveAt,
-        230,
+        lockAt,
+        220,
         "cubic-bezier(.6, 0, .2, 1)"
       );
     }
 
+    const bracketOpenDuration = 46;
+    const bracketOpenOffset = bracketOpenDuration / flightDuration;
+
     animateMotion(
       state,
-      total,
+      leftBracket,
       [
         {
-          transform: `translate(${dx}px, ${dy}px) scale(1, 1)`,
-          filter: "blur(0px) drop-shadow(0 0 0px #fff0)",
-          opacity: 1
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
         },
         {
-          transform: `translate(${dx - 8}px, ${dy - 2}px) scale(.7, 1.12)`,
-          filter: "blur(.15px) drop-shadow(0 0 8px #fff)",
-          opacity: 1
+          transform: "translate3d(-28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 5px #fff",
+          offset: bracketOpenOffset
+        },
+        {
+          transform: "translate3d(-28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 5px #fff"
         }
       ],
-      moveAt,
-      launchAt - moveAt,
-      "cubic-bezier(.7, 0, 1, .35)"
-    );
-
-    const positions = Array.from({ length: 49 }, (_, index) => {
-      const t = index / 48;
-      const remaining = (1 - t) ** 4;
-
-      return {
-        t,
-        x: 2 + (dx - 10) * remaining,
-        y: (dy - 2) * (1 - t ** 2.5)
-      };
-    });
-
-    const flightFrames = positions.map(({ t, x, y }) => {
-      const stretch = Math.sin(Math.PI * t) ** 2.2;
-      const flare = Math.sin(Math.PI * t);
-      const scaleX = 1 + 1.25 * stretch;
-      const scaleY = 1 - 0.42 * stretch;
-
-      return {
-        offset: t,
-        transform: `translate(${x}px, ${y}px) scale(${scaleX}, ${scaleY})`,
-        filter: `blur(${0.8 * stretch}px) drop-shadow(0 0 ${5 + 8 * flare}px #fff)`,
-        opacity: 1 - 0.28 * stretch
-      };
-    });
-
-    animateMotion(
-      state,
-      total,
-      flightFrames,
       launchAt,
-      arrivalAt - launchAt,
-      "cubic-bezier(.78, 0, .08, 1)"
+      flightDuration,
+      "cubic-bezier(.08, .82, .16, 1)"
     );
 
-    const totalBox = total.getBoundingClientRect();
-    const timelineBox = timeline.getBoundingClientRect();
-
-    for (let index = 0; index < 3; index += 1) {
-      const echo = total.cloneNode(true);
-      echo.classList.add("cui-motion-echo");
-      echo.setAttribute("aria-hidden", "true");
-      echo.querySelector("span").textContent = finalText;
-      echo.style.left = `${totalBox.left - timelineBox.left}px`;
-      echo.style.top = `${totalBox.top - timelineBox.top}px`;
-      timeline.appendChild(echo);
-
-      animateMotion(
-        state,
-        echo,
-        flightFrames.map((frame) => ({
-          ...frame,
-          opacity:
-            frame.offset < 0.88
-              ? (0.2 - index * 0.045) *
-                Math.sin(Math.PI * frame.offset)
-              : 0
-        })),
-        launchAt + 24 + index * 24,
-        arrivalAt - launchAt,
-        "cubic-bezier(.78, 0, .08, 1)"
-      );
-    }
-
-    const endX = target.x + 2;
-    const startY = target.y + dy - 2;
-    const curveData =
-      `M ${target.x + dx - 8} ${startY} C ${target.x + dx * 0.45} ${startY}, ${target.x - 18} ${target.y}, ${endX} ${target.y}`;
-
-    let traveled = 0;
-    const distances = positions.map((point, index) => {
-      if (index > 0) {
-        traveled += Math.hypot(
-          point.x - positions[index - 1].x,
-          point.y - positions[index - 1].y
-        );
-      }
-
-      return traveled;
-    });
-
-    for (const [width, tail, strength, blur] of [
-      [12, 150, 0.16, 3.6],
-      [5, 140, 0.3, 1.4],
-      [1, 165, 1, 0],
-      [2, 42, 0.92, 0.2]
-    ]) {
-      const beam = createMotionPath(
-        state,
-        curveData,
-        "cui-flight-beam"
-      );
-      beam.setAttribute("stroke-width", width);
-      beam.style.filter = `blur(${blur}px)`;
-
-      const length = beam.getTotalLength();
-      beam.style.strokeDasharray = `${tail} ${length + tail}`;
-
-      animateMotion(
-        state,
-        beam,
-        positions.map(({ t }, index) => ({
-          offset: t,
-          strokeDashoffset:
-            tail - distances[index] / traveled * length,
-          opacity:
-            t === 0 || t === 1
-              ? 0
-              : strength * Math.sin(Math.PI * t) ** 0.6
-        })),
-        launchAt,
-        arrivalAt - launchAt,
-        "cubic-bezier(.78, 0, .08, 1)"
-      );
-    }
+    animateMotion(
+      state,
+      rightBracket,
+      [
+        {
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
+        },
+        {
+          transform: "translate3d(28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 5px #fff",
+          offset: bracketOpenOffset
+        },
+        {
+          transform: "translate3d(28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 5px #fff"
+        }
+      ],
+      launchAt,
+      flightDuration,
+      "cubic-bezier(.08, .82, .16, 1)"
+    );
 
     animateMotion(
       state,
       total,
       [
         {
-          transform: "translate(3px, 0) scale(1.08, .96)",
-          filter: "blur(0px) drop-shadow(0 0 9px #fff)"
+          transform: `translate3d(${dx}px, ${dy}px, 0)`
         },
         {
-          transform: "translate(1px, 0) scale(1.02, 1)",
-          filter: "blur(0px) drop-shadow(0 0 4px #fff8)",
-          offset: 0.34
-        },
-        {
-          transform: "translate(0, 0) scale(1, 1)",
-          filter: "blur(0px) drop-shadow(0 0 0px #fff0)"
+          transform: "translate3d(0, 0, 0)"
         }
       ],
-      arrivalAt,
-      260,
-      "cubic-bezier(.12, .78, .2, 1)"
+      launchAt,
+      flightDuration,
+      "cubic-bezier(.04, .9, .12, 1)"
     );
 
-    const impactX = totalBox.right - timelineBox.left + 2;
-    const impactY =
-      totalBox.top - timelineBox.top + totalBox.height / 2;
+    const sourceX = target.x + dx;
+    const sourceY = target.y + dy;
 
-    for (const streak of [
-      { y: -4, length: 42, width: 0.8, delay: 0, opacity: 0.65 },
-      { y: 0, length: 76, width: 1.35, delay: 8, opacity: 1 },
-      { y: 3, length: 54, width: 0.9, delay: 18, opacity: 0.72 }
-    ]) {
-      const line = createMotionPath(
-        state,
-        `M ${impactX} ${impactY + streak.y} H ${impactX + streak.length}`,
-        "cui-burst-ray"
-      );
-
-      line.setAttribute("stroke-width", streak.width);
-      const length = line.getTotalLength();
-      line.style.strokeDasharray = `12 ${length + 12}`;
-
-      animateMotion(
-        state,
-        line,
-        [
-          { strokeDashoffset: 12, opacity: 0 },
-          {
-            strokeDashoffset: -length * 0.38,
-            opacity: streak.opacity,
-            offset: 0.2
-          },
-          { strokeDashoffset: -length, opacity: 0 }
-        ],
-        arrivalAt + streak.delay,
-        220,
-        "cubic-bezier(.1, .82, .2, 1)"
-      );
-    }
+    const rail = createMotionPath(
+      state,
+      `M ${sourceX} ${sourceY} L ${target.x + 88} ${target.y}`,
+      "cui-flight-beam"
+    );
+    rail.setAttribute("stroke-width", "1.2");
+    const railLength = rail.getTotalLength();
+    rail.style.strokeDasharray = railLength;
+    rail.style.strokeDashoffset = railLength;
 
     animateMotion(
       state,
-      number,
+      rail,
+      [
+        { strokeDashoffset: railLength, opacity: 0 },
+        { strokeDashoffset: 0, opacity: 1, offset: 0.18 },
+        { strokeDashoffset: 0, opacity: 0.65, offset: 0.46 },
+        { strokeDashoffset: -railLength, opacity: 0 }
+      ],
+      launchAt - 25,
+      190,
+      "cubic-bezier(.04, .9, .12, 1)"
+    );
+
+    const railOffset = createMotionPath(
+      state,
+      `M ${sourceX} ${sourceY - 3} L ${target.x + 56} ${target.y - 3}`,
+      "cui-flight-beam"
+    );
+    railOffset.setAttribute("stroke-width", "0.6");
+    const railOffsetLength = railOffset.getTotalLength();
+    railOffset.style.strokeDasharray = railOffsetLength;
+    railOffset.style.strokeDashoffset = railOffsetLength;
+
+    animateMotion(
+      state,
+      railOffset,
+      [
+        { strokeDashoffset: railOffsetLength, opacity: 0 },
+        { strokeDashoffset: 0, opacity: 0.7, offset: 0.2 },
+        { strokeDashoffset: -railOffsetLength, opacity: 0 }
+      ],
+      launchAt,
+      170,
+      "cubic-bezier(.04, .9, .12, 1)"
+    );
+
+    const stompDuration = slamDuration + settleDuration;
+    const slamOffset = slamDuration / stompDuration;
+
+    animateMotion(
+      state,
+      leftBracket,
+      [
+        {
+          transform: "translate3d(-28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 7px #fff"
+        },
+        {
+          transform: "translate3d(4px, 0, 0) scaleX(1.36)",
+          textShadow: "0 0 16px #fff",
+          offset: slamOffset
+        },
+        {
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
+        }
+      ],
+      arrivalAt + stompDelay,
+      stompDuration,
+      "cubic-bezier(.06, .88, .12, 1)"
+    );
+
+    animateMotion(
+      state,
+      rightBracket,
+      [
+        {
+          transform: "translate3d(28px, 0, 0) scaleX(1.16)",
+          textShadow: "0 0 7px #fff"
+        },
+        {
+          transform: "translate3d(-4px, 0, 0) scaleX(1.36)",
+          textShadow: "0 0 16px #fff",
+          offset: slamOffset
+        },
+        {
+          transform: "translate3d(0, 0, 0) scaleX(1)",
+          textShadow: "0 0 0px #fff0"
+        }
+      ],
+      arrivalAt + stompDelay,
+      stompDuration,
+      "cubic-bezier(.06, .88, .12, 1)"
+    );
+
+    animateMotion(
+      state,
+      value,
       [
         { color: "#d4d4d4", textShadow: "0 0 0px #fff0" },
         {
           color: "#fff",
           textShadow: "0 0 8px #fff",
-          offset: 0.16
+          offset: 0.32
         },
         {
           color: "#d4d4d4",
           textShadow: "0 0 0px #fff0"
         }
       ],
-      arrivalAt,
-      260,
+      arrivalAt + stompDelay,
+      stompDuration,
       "cubic-bezier(.22, 1, .36, 1)"
     );
 
@@ -660,7 +719,11 @@
           <span class="cui-timeline-duration">0.0 s</span>
         </span>
         <span class="cui-timeline-node" data-node="lastToken">Last token</span>
-        <span class="cui-timeline-total">[<span>0.0s</span>]</span>
+        <span class="cui-timeline-total">
+          <span class="cui-timeline-total-bracket cui-timeline-total-bracket-left">[</span>
+          <span class="cui-timeline-total-value">0s</span>
+          <span class="cui-timeline-total-bracket cui-timeline-total-bracket-right">]</span>
+        </span>
       </span>
     `;
     return timeline;
@@ -859,8 +922,8 @@
     });
 
     if (state.completionAnimationDone) {
-      state.timeline.querySelector(".cui-timeline-total span").textContent =
-        formatCompactDuration(state.lastTokenAt - state.feReqAt);
+      state.timeline.querySelector(".cui-timeline-total-value").textContent =
+        formatTotalDuration(state.lastTokenAt - state.feReqAt);
     }
   }
 

@@ -211,6 +211,9 @@ html:not(.cui-enhanced-thinking) .cui-turn-timeline {
   position: relative;
   z-index: 3;
   margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6em;
   color: #737373;
   opacity: 0;
 }
@@ -219,11 +222,23 @@ html:not(.cui-enhanced-thinking) .cui-turn-timeline {
   opacity: 1;
 }
 
-.cui-timeline-total span {
+.cui-timeline-total-value,
+.cui-timeline-total-bracket {
   display: inline-block;
   color: #d4d4d4;
   font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-variant-numeric: tabular-nums;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
+}
+
+.cui-timeline-total-value {
+  text-align: center;
+}
+
+.cui-timeline-total-bracket {
+  width: 0.7em;
+  text-align: center;
 }
 
 .cui-turn-timeline[data-completion-motion="true"] {
