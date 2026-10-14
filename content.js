@@ -66,9 +66,38 @@
 
   function markDisclaimer() {
     const targetText = "ChatGPT can make mistakes. Check important info.";
+    const marked = [
+      ...document.querySelectorAll('[data-cui-disclaimer="true"]')
+    ];
 
-    for (const el of document.querySelectorAll("body div")) {
-      if ((el.textContent || "").trim() === targetText) {
+    if (!settings.hideDisclaimer) {
+      for (const el of marked) {
+        el.removeAttribute("data-cui-disclaimer");
+      }
+      return;
+    }
+
+    const matches = [...document.querySelectorAll("main div")].filter(
+      (el) => (el.textContent || "").trim() === targetText
+    );
+
+    for (const el of marked) {
+      const stillMatches = matches.includes(el);
+      const containsMatchingDescendant = matches.some(
+        (other) => other !== el && el.contains(other)
+      );
+
+      if (!stillMatches || containsMatchingDescendant) {
+        el.removeAttribute("data-cui-disclaimer");
+      }
+    }
+
+    for (const el of matches) {
+      const containsMatchingDescendant = matches.some(
+        (other) => other !== el && el.contains(other)
+      );
+
+      if (!containsMatchingDescendant) {
         el.dataset.cuiDisclaimer = "true";
       }
     }
