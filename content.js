@@ -144,6 +144,18 @@
     );
   }
 
+  function getChatActionsButton() {
+    return [...document.querySelectorAll('[aria-label="Chat actions"]')]
+      .filter(isActuallyVisible)
+      .filter((el) => el.getBoundingClientRect().top < 96)
+      .sort((a, b) => {
+        const ar = a.getBoundingClientRect();
+        const br = b.getBoundingClientRect();
+
+        return ar.top - br.top || br.right - ar.right;
+      })[0] ?? null;
+  }
+
   function getProfileButton() {
     let candidates = [
       ...document.querySelectorAll('[aria-label*="profile menu" i]')
@@ -177,6 +189,27 @@
   function positionToggleButton() {
     if (!toggleButton) return;
 
+    const chatActions = getChatActionsButton();
+
+    if (chatActions?.parentElement) {
+      if (
+        toggleButton.parentElement !== chatActions.parentElement ||
+        toggleButton.nextElementSibling !== chatActions
+      ) {
+        chatActions.parentElement.insertBefore(toggleButton, chatActions);
+      }
+
+      toggleButton.style.left = "";
+      toggleButton.style.top = "";
+      toggleButton.style.width = "";
+      toggleButton.style.height = "";
+      toggleButton.style.marginLeft = "";
+      toggleButton.classList.add("cui-toggle-toolbar", "cui-toggle-compact");
+      return;
+    }
+
+    toggleButton.classList.remove("cui-toggle-toolbar");
+
     const profile = getProfileButton();
     if (!profile) return;
 
@@ -198,8 +231,7 @@
   }
 
   function ensureToggleButton() {
-    const profile = getProfileButton();
-    if (!profile) return;
+    if (!getChatActionsButton() && !getProfileButton()) return;
 
     const existing = document.getElementById("cui-layout-toggle");
 
@@ -250,12 +282,22 @@
 
     const rect = toggleButton.getBoundingClientRect();
     const width = Math.min(320, Math.max(280, window.innerWidth - 16));
-    const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
-    const bottom = Math.max(8, window.innerHeight - rect.top + 8);
+    const left = Math.max(
+      8,
+      Math.min(rect.right - width, window.innerWidth - width - 8)
+    );
 
     panelHost.style.left = `${left}px`;
-    panelHost.style.bottom = `${bottom}px`;
     panelHost.style.width = `${width}px`;
+
+    if (toggleButton.classList.contains("cui-toggle-toolbar")) {
+      panelHost.style.top = `${Math.min(window.innerHeight - 8, rect.bottom + 8)}px`;
+      panelHost.style.bottom = "";
+    } else {
+      panelHost.style.top = "";
+      panelHost.style.bottom =
+        `${Math.max(8, window.innerHeight - rect.top + 8)}px`;
+    }
   }
 
   function getPresetName() {

@@ -95,6 +95,17 @@ html.cui-hide-disclaimer [data-cui-disclaimer="true"] {
   display: none;
 }
 
+#cui-layout-toggle.cui-toggle-toolbar {
+  position: static;
+  z-index: auto;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  flex: 0 0 36px;
+  padding: 0;
+  justify-content: center;
+}
+
 html.cui-square #cui-layout-toggle {
   border-radius: 0 !important;
 }
