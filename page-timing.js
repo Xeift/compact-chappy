@@ -13,10 +13,7 @@
     reasoningEndSeen: false,
     timelineMounted: false,
     mountAttempts: 0,
-    lastMountState: null,
-    domTrace: [],
-    traceActive: false,
-    lastError: null
+    lastMountState: null
   };
 
   const originalFetch = window.fetch;
@@ -24,143 +21,13 @@
   let activeState = null;
   let turnSequence = 0;
   let mountQueued = false;
-  const domTraceSeen = new Set();
-  const DOM_TRACE_LIMIT = 300;
-
-  function summarizeElement(element) {
-    if (!(element instanceof Element)) return null;
-
-    const text = (element.innerText || element.textContent || "")
-      .replace(/\s+/g, " ")
-      .trim();
-
-    return {
-      tag: element.tagName,
-      id: element.id || null,
-      class:
-        typeof element.className === "string"
-          ? element.className.slice(0, 300)
-          : null,
-      role: element.getAttribute("role"),
-      data: Object.fromEntries(
-        [...element.attributes]
-          .filter((attribute) => attribute.name.startsWith("data-"))
-          .slice(0, 20)
-          .map((attribute) => [attribute.name, attribute.value])
-      ),
-      text: text.slice(0, 300),
-      html: element.outerHTML.slice(0, 1500)
-    };
+  let domObserverActive = false;
+  let enhancedThinkingEnabled = document.documentElement.classList.contains(
+    "cui-enhanced-thinking"
+  );
+  function setMountState(nextState) {
+    window.__compactChappyTiming.lastMountState = nextState;
   }
-
-  function summarizeAncestors(element, depth = 5) {
-    const ancestors = [];
-    let current = element?.parentElement ?? null;
-
-    for (let index = 0; current && index < depth; index += 1) {
-      ancestors.push(summarizeElement(current));
-      current = current.parentElement;
-    }
-
-    return ancestors;
-  }
-
-  function collectDomSnapshot() {
-    const main = document.querySelector("main") || document.body;
-
-    const activityCandidates = [
-      ...document.querySelectorAll(
-        '[class*="activity"], [class*="reason"], [class*="agent"]'
-      )
-    ]
-      .filter((element) => !element.closest(".cui-turn-timeline"))
-      .slice(-25)
-      .map(summarizeElement);
-
-    const textCandidates = [...main.querySelectorAll("div, span, button")]
-      .filter((element) => {
-        if (element.closest(".cui-turn-timeline")) return false;
-        const text = (element.innerText || element.textContent || "")
-          .replace(/\s+/g, " ")
-          .trim();
-        if (!text || text.length > 220) return false;
-        return element.children.length <= 4;
-      })
-      .slice(-35)
-      .map(summarizeElement);
-
-    return {
-      activityCandidates,
-      textCandidates
-    };
-  }
-
-  function recordDomTrace(
-    stage,
-    details = null,
-    element = null,
-    includeSnapshot = true
-  ) {
-    const timing = window.__compactChappyTiming;
-    if (timing.domTrace.length >= DOM_TRACE_LIMIT) return;
-
-    timing.domTrace.push({
-      seq: timing.domTrace.length + 1,
-      stage,
-      atMs: Number(performance.now().toFixed(1)),
-      url: location.href,
-      mountState: timing.lastMountState,
-      details,
-      element: summarizeElement(element),
-      ancestors: element ? summarizeAncestors(element) : [],
-      snapshot: includeSnapshot ? collectDomSnapshot() : null
-    });
-  }
-
-  function recordMutationNode(node, kind) {
-    if (!window.__compactChappyTiming.traceActive) return;
-
-    const element =
-      node instanceof Element
-        ? node
-        : node?.parentElement instanceof Element
-          ? node.parentElement
-          : null;
-
-    if (!element || element.closest(".cui-turn-timeline")) return;
-
-    const summary = summarizeElement(element);
-    if (!summary?.text) return;
-
-    const signature = [
-      kind,
-      summary.tag,
-      summary.id,
-      summary.class,
-      summary.text.slice(0, 120)
-    ].join("|");
-
-    if (domTraceSeen.has(signature)) return;
-    domTraceSeen.add(signature);
-
-    recordDomTrace(`dom-${kind}`, null, element, false);
-  }
-
-  function setMountState(nextState, element = null) {
-    const timing = window.__compactChappyTiming;
-    if (timing.lastMountState !== nextState && timing.traceActive) {
-      recordDomTrace(`mount-${nextState}`, null, element);
-    }
-    timing.lastMountState = nextState;
-  }
-
-  window.__compactChappyTiming.exportDomTrace = () =>
-    JSON.stringify(window.__compactChappyTiming.domTrace, null, 2);
-
-  window.__compactChappyTiming.clearDomTrace = () => {
-    window.__compactChappyTiming.domTrace.length = 0;
-    domTraceSeen.clear();
-  };
 
   function epochSecondsToPerformanceTime(epochSeconds) {
     return performance.now() + epochSeconds * 1000 - Date.now();
@@ -283,6 +150,10 @@
     delete state.timeline.dataset.completionMotion;
     state.timeline.dataset.completionDone = "true";
     state.completionAnimationDone = true;
+
+    if (activeState === state && state.lastTokenAt != null) {
+      stopDomObserver();
+    }
   }
 
   function startCompletionAnimation(state) {
@@ -764,8 +635,10 @@
   }
 
   function getWorkedLabel(state) {
-    const mounted = document.querySelector('[data-cui-timeline-host="true"]');
-    if (mounted?.contains(state.timeline)) return mounted;
+    const currentHost = state.timeline.parentElement;
+    if (currentHost?.dataset.cuiTimelineHost === "true") {
+      return currentHost;
+    }
 
     const turn = getLiveTurn(state);
     if (!turn) return null;
@@ -809,17 +682,20 @@
     if (workedLabel) {
       clearLiveMount(state);
 
-      if (!workedLabel.dataset.cuiNativeWorkedText) {
-        workedLabel.dataset.cuiNativeWorkedText =
-          (workedLabel.textContent || "").trim();
+      if (state.timeline.parentElement !== workedLabel) {
+        if (!workedLabel.dataset.cuiNativeWorkedText) {
+          workedLabel.dataset.cuiNativeWorkedText =
+            (workedLabel.textContent || "").trim();
+        }
+
+        workedLabel.textContent = "";
+        workedLabel.appendChild(state.timeline);
       }
 
-      workedLabel.textContent = "";
       workedLabel.dataset.cuiTimelineHost = "true";
       if (workedLabel.parentElement) {
         workedLabel.parentElement.dataset.cuiTimelineHostContainer = "true";
       }
-      workedLabel.appendChild(state.timeline);
 
       window.__compactChappyTiming.timelineMounted = true;
       setMountState("worked-label", workedLabel);
@@ -871,10 +747,24 @@
     return -1;
   }
 
+  function setTextContent(element, value) {
+    if (element.textContent !== value) {
+      element.textContent = value;
+    }
+  }
+
+  function setDataValue(element, key, value) {
+    if (element.dataset[key] !== value) {
+      element.dataset[key] = value;
+    }
+  }
+
   function renderTimeline(state) {
     if (!isEnhancedThinkingEnabled()) return;
 
-    mountTimeline(state);
+    if (!state.timeline.isConnected) {
+      mountTimeline(state);
+    }
 
     const now = performance.now();
     const activeSegment = getActiveSegment(state);
@@ -891,15 +781,15 @@
       const duration = segment.querySelector(".cui-timeline-duration");
 
       if (typeof start !== "number") {
-        duration.textContent = "0.0 s";
+        setTextContent(duration, "0.0 s");
       } else if (typeof end === "number") {
-        duration.textContent = formatDuration(end - start);
+        setTextContent(duration, formatDuration(end - start));
       } else if (index === activeSegment) {
-        duration.textContent = formatDuration(now - start);
+        setTextContent(duration, formatDuration(now - start));
       }
 
-      segment.dataset.active = String(index === activeSegment);
-      segment.dataset.complete = String(typeof end === "number");
+      setDataValue(segment, "active", String(index === activeSegment));
+      setDataValue(segment, "complete", String(typeof end === "number"));
     });
 
     const nodeKeys = [
@@ -917,17 +807,20 @@
           ? activeSegment === -1
           : typeof points[index + 1] !== "number");
 
-      node.dataset.reached = String(reached);
-      node.dataset.current = String(current);
+      setDataValue(node, "reached", String(reached));
+      setDataValue(node, "current", String(current));
     });
 
     if (state.completionAnimationDone) {
-      state.timeline.querySelector(".cui-timeline-total-value").textContent =
-        formatTotalDuration(state.lastTokenAt - state.feReqAt);
+      setTextContent(
+        state.timeline.querySelector(".cui-timeline-total-value"),
+        formatTotalDuration(state.lastTokenAt - state.feReqAt)
+      );
     }
   }
 
   function startTimer(state) {
+    if (state.timer !== null || state.lastTokenAt != null) return;
     state.timer = window.setInterval(() => renderTimeline(state), 100);
   }
 
@@ -937,17 +830,21 @@
     state.timer = null;
   }
 
+  function forgetState(state) {
+    if (
+      state.turnExchangeId &&
+      statesByExchangeId.get(state.turnExchangeId) === state
+    ) {
+      statesByExchangeId.delete(state.turnExchangeId);
+    }
+  }
+
   function setLastToken(state, perfAt) {
     if (state.lastTokenAt != null) return;
     state.lastTokenAt = perfAt;
     stopTimer(state);
     renderTimeline(state);
     startCompletionAnimation(state);
-    recordDomTrace("last-token", {
-      turnKey: state.turnKey,
-      lastTokenAt: state.lastTokenAt
-    });
-    window.__compactChappyTiming.traceActive = false;
   }
 
   function inspectPayload(payload, state) {
@@ -966,10 +863,6 @@
         statesByExchangeId.set(state.turnExchangeId, state);
       }
 
-      recordDomTrace("input-message", {
-        turnKey: state.turnKey,
-        turnExchangeId: state.turnExchangeId
-      });
       return;
     }
 
@@ -981,10 +874,6 @@
       ) {
         state.cotStartAt = performance.now();
         renderTimeline(state);
-        recordDomTrace("cot-first-token", {
-          turnKey: state.turnKey,
-          cotStartAt: state.cotStartAt
-        });
       }
 
       if (payload.marker === "final_channel_token" && payload.event === "first") {
@@ -994,10 +883,6 @@
         }
 
         state.finalChannelStarted = true;
-        recordDomTrace("final-first-token", {
-          turnKey: state.turnKey,
-          cotEndAt: state.cotEndAt
-        });
       }
       return;
     }
@@ -1013,10 +898,6 @@
         epochSecondsToPerformanceTime(metadata.reasoning_start_time);
       window.__compactChappyTiming.reasoningStartSeen = true;
       renderTimeline(state);
-      recordDomTrace("reasoning-start-metadata", {
-        turnKey: state.turnKey,
-        reasoningStartAt: state.reasoningStartAt
-      });
     }
 
     if (
@@ -1027,10 +908,6 @@
         epochSecondsToPerformanceTime(metadata.reasoning_end_time);
       window.__compactChappyTiming.reasoningEndSeen = true;
       renderTimeline(state);
-      recordDomTrace("reasoning-end-metadata", {
-        turnKey: state.turnKey,
-        reasoningEndAt: state.reasoningEndAt
-      });
     }
 
     if (message?.channel === "final") {
@@ -1179,12 +1056,7 @@
     stopTimer(state);
     renderTimeline(state);
     startCompletionAnimation(state);
-    recordDomTrace("telemetry-final", {
-      turnKey: state.turnKey,
-      apiStartDelay: analytics.api_start_delay,
-      apiOpenDelay: analytics.api_open_delay,
-      timeToLastTokenMs: analytics.time_to_last_token_ms
-    });
+    forgetState(state);
   }
 
   function scheduleMount() {
@@ -1197,38 +1069,43 @@
     });
   }
 
-  let lastCharacterTraceAt = 0;
+  const domObserver = new MutationObserver((records) => {
+    if (!enhancedThinkingEnabled || !activeState) return;
 
-  new MutationObserver((records) => {
-    if (!isEnhancedThinkingEnabled()) return;
+    const hasExternalMutation = records.some((record) => {
+      const target =
+        record.target instanceof Element
+          ? record.target
+          : record.target?.parentElement;
 
-    scheduleMount();
+      return !target?.closest(".cui-turn-timeline");
+    });
 
-    if (!window.__compactChappyTiming.traceActive) return;
-
-    for (const record of records) {
-      for (const node of record.addedNodes) {
-        recordMutationNode(node, "added");
-      }
-
-      if (
-        record.type === "characterData" &&
-        performance.now() - lastCharacterTraceAt >= 250
-      ) {
-        lastCharacterTraceAt = performance.now();
-        recordMutationNode(record.target, "text");
-      }
-    }
-  }).observe(document, {
-    childList: true,
-    characterData: true,
-    subtree: true
+    if (hasExternalMutation) scheduleMount();
   });
 
+  function startDomObserver() {
+    if (domObserverActive) return;
+
+    domObserver.observe(document, {
+      childList: true,
+      subtree: true
+    });
+    domObserverActive = true;
+  }
+
+  function stopDomObserver() {
+    if (!domObserverActive) return;
+    domObserver.disconnect();
+    domObserverActive = false;
+  }
+
   new MutationObserver(() => {
+    enhancedThinkingEnabled = isEnhancedThinkingEnabled();
     if (!activeState) return;
 
-    if (!isEnhancedThinkingEnabled()) {
+    if (!enhancedThinkingEnabled) {
+      stopDomObserver();
       stopTimer(activeState);
       clearLiveMount(activeState);
 
@@ -1264,11 +1141,12 @@
       return;
     }
 
-    if (
-      activeState.lastTokenAt == null &&
-      activeState.timer === null
-    ) {
-      startTimer(activeState);
+    if (activeState.lastTokenAt == null) {
+      startDomObserver();
+
+      if (activeState.timer === null) {
+        startTimer(activeState);
+      }
     }
 
     renderTimeline(activeState);
@@ -1278,14 +1156,25 @@
   });
 
   window.fetch = async function (...args) {
-    if (!isEnhancedThinkingEnabled()) {
+    if (!enhancedThinkingEnabled) {
       return originalFetch.apply(this, args);
     }
 
     const rawUrl = args[0] instanceof Request ? args[0].url : String(args[0]);
+    const isTelemetry = rawUrl.includes("/ces/v1/telemetry/intake");
+    const isConversation = rawUrl.includes("/backend-api/f/conversation");
+
+    if (!isTelemetry && !isConversation) {
+      return originalFetch.apply(this, args);
+    }
+
     const url = new URL(rawUrl, location.href);
 
     if (url.pathname === "/ces/v1/telemetry/intake") {
+      if (statesByExchangeId.size === 0) {
+        return originalFetch.apply(this, args);
+      }
+
       window.__compactChappyTiming.telemetryRequests += 1;
       inspectTelemetryRequest(args[0], args[1]);
       return originalFetch.apply(this, args);
@@ -1296,11 +1185,6 @@
     }
 
     const timing = window.__compactChappyTiming;
-    if (!timing.traceActive) {
-      timing.clearDomTrace();
-      timing.traceActive = true;
-    }
-
     timing.conversationRequests += 1;
     timing.lastConversationPath = url.pathname;
     timing.timelineMounted = false;
@@ -1308,9 +1192,6 @@
 
     const fetchStartedAt = performance.now();
 
-    recordDomTrace("conversation-fetch-start", {
-      requestUrl: url.pathname
-    });
 
     const state = {
       turnKey: ++turnSequence,
@@ -1339,19 +1220,38 @@
       motionOverlay: null
     };
 
+    if (activeState && activeState !== state) {
+      stopTimer(activeState);
+      forgetState(activeState);
+    }
+
     activeState = state;
+    startDomObserver();
     startTimer(state);
 
-    const response = await originalFetch.apply(this, args);
+    let response;
+    try {
+      response = await originalFetch.apply(this, args);
+    } catch (error) {
+      stopTimer(state);
+      forgetState(state);
+      if (activeState === state) {
+        activeState = null;
+        stopDomObserver();
+      }
+      throw error;
+    }
+
     state.beRespAt = performance.now();
     renderTimeline(state);
-    recordDomTrace("conversation-response-open", {
-      turnKey: state.turnKey,
-      status: response.status,
-      beRespAt: state.beRespAt
-    });
 
     if (!response.body) {
+      stopTimer(state);
+      forgetState(state);
+      if (activeState === state) {
+        activeState = null;
+        stopDomObserver();
+      }
       throw new Error("Conversation response has no body stream");
     }
 

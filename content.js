@@ -696,8 +696,17 @@
   function installObserver() {
     let queued = false;
 
-    const observer = new MutationObserver(() => {
-      if (queued) return;
+    const observer = new MutationObserver((records) => {
+      const hasExternalMutation = records.some((record) => {
+        const target =
+          record.target instanceof Element
+            ? record.target
+            : record.target?.parentElement;
+
+        return !target?.closest(".cui-turn-timeline");
+      });
+
+      if (!hasExternalMutation || queued) return;
       queued = true;
 
       requestAnimationFrame(() => {

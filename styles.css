@@ -204,6 +204,8 @@ html:not(.cui-enhanced-thinking) .cui-turn-timeline {
   inset: 0;
   width: 45%;
   background: #d4d4d4;
+  will-change: transform, opacity;
+  backface-visibility: hidden;
   animation: cui-timeline-flow 1.15s ease-in-out infinite;
 }
 
@@ -288,7 +290,7 @@ html:not(.cui-enhanced-thinking) .cui-turn-timeline {
 
 @keyframes cui-timeline-flow {
   from {
-    transform: translateX(-130%);
+    transform: translate3d(-130%, 0, 0);
     opacity: 0;
   }
 
@@ -297,7 +299,7 @@ html:not(.cui-enhanced-thinking) .cui-turn-timeline {
   }
 
   to {
-    transform: translateX(260%);
+    transform: translate3d(260%, 0, 0);
     opacity: 0;
   }
 }
